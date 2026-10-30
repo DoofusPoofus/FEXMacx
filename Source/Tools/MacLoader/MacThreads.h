@@ -29,16 +29,13 @@ public:
   explicit GuestThreads(FEXCore::Context::Context* CTX)
     : CTX {CTX} {}
 
-  // returns the feature bits that go back to the guest
   uint64_t RecordRegistration(uint64_t ThreadStart, uint64_t WorkqueueThreadStart, uint64_t RegistrationData, uint64_t RegistrationDataSize);
 
-  // returns the pthread pointer for the guest or an errno in Error
   uint64_t Create(uint64_t StartFunction, uint64_t StartArgument, uint64_t Stack, uint64_t Pthread, uint32_t Flags, int& Error);
 
   [[noreturn]]
   void Terminate(uint64_t StackAddress, uint64_t FreeSize, uint32_t KernelPort, uint32_t JoinSemaphore);
 
-  // workq_kernreturn. returns an errno (0 on success)
   int HandleWorkqueueCall(uint64_t Operation, uint64_t Item, uint64_t Argument, uint64_t Priority);
 
   FEXCore::Context::Context* GetContext() const {

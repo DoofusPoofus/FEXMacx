@@ -4,6 +4,8 @@
  on linux FEXs thread manager gives evry guest thread a GDT with a 64 bit code segment
  and a call/ret stack with guard pages. nothing else does that on mac so this does
  keep the object alive as long as the thread runs cuz the thread state points into it
+ ReleaseGuestRange only frees whole 16K host pages cuz x86 code frees in 4K steps and a 16K page
+ can still hold other stuff the guest uses
 */
 #pragma once
 
@@ -17,8 +19,6 @@ struct InternalThreadState;
 }
 
 namespace FEXMacx {
-// x86 apps think pages are 4K but apple silicon pages are 16K. freeing a 4K aligned range would take
-// the whole 16K page with it so only pages that are fully inside the range get released
 void ReleaseGuestRange(uint64_t Address, uint64_t Size);
 
 class GuestThreadSetup final {

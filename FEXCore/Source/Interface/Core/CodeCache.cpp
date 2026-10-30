@@ -988,7 +988,7 @@ void CodeCache::FinalizeCodePages(MappedCodeCacheFile& Code, std::span<std::byte
   // Release resident file pages that will no longer be needed. The VA range is left allocated to allow cleanup with a single VirtualFree.
   Allocator::VirtualDontNeed(Code.CodeBufferInFile.data() + StartOffset, Size);
 #else
-  // TODO: Implement lazy mapping on Windows and macOS
+  // TODO: Implement lazy mapping on Windows
   FEXCore::Utils::ScopedJITWrite JITWrite;
 #if defined(_M_ARM64EC) || defined(__APPLE__)
   memcpy(Code.CodeBuffer.data() + StartOffset, Code.CodeBufferInFile.data() + StartOffset, Size);

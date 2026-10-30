@@ -75,7 +75,6 @@ elseif (MSVC)
   message(FATAL_ERROR "FEX doesn't support MSVC! Use Clang on MinGW instead.")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   message(STATUS "Building FEXMacx for macOS")
-  # range-v3 still uses _LIBCPP_TEMPLATE_VIS which newer libc++ removed
   add_compile_definitions("_LIBCPP_TEMPLATE_VIS=")
   set(ENABLE_JEMALLOC_GLIBC_ALLOC FALSE)
   set(BUILD_FEXCONFIG FALSE)

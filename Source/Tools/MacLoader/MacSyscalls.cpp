@@ -155,7 +155,6 @@ int HostProtectionFor(int GuestProtection) {
   return HostProtection;
 }
 
-// this bum ahh function exists cuz x86 apps think pages are 4K and apple silicon pages are 16K
 int ProtectGuestRange(uint64_t Address, uint64_t Size, int GuestProtection) {
   if (Size == 0) {
     return 0;
@@ -193,8 +192,6 @@ struct MigEmptyReply {
   kern_return_t ReturnCode;
 };
 
-// objc registers x86 code as restartable ranges. the kernel cant restart guest code (the real pc is in the jit)
-// and says no, so this answers the request locally with a success reply
 bool AnswerRestartableRangesLocally(const uint64_t (&Args)[8], uint64_t& MachResult) {
   const uint64_t Options = Args[1];
   const uint32_t RemotePort = static_cast<uint32_t>(Args[3]);
@@ -245,7 +242,6 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
   const uint64_t RawNumber = State.gregs[REG_RAX];
   const uint32_t Class = (RawNumber >> 24) & 0xFF;
   const uint32_t Number = RawNumber & 0xFF'FFFF;
-  // args 7 and 8 sit on the guest stack above the return address of the libsystem_kernel stub
   const auto* GuestStack = reinterpret_cast<const uint64_t*>(State.gregs[REG_RSP]);
   const uint64_t Args[8] = {
     State.gregs[REG_RDI], State.gregs[REG_RSI], State.gregs[REG_RDX], State.gregs[REG_R10],
@@ -287,7 +283,6 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
       }
       Threads.Terminate(Args[0], Args[1], static_cast<uint32_t>(Args[2]), static_cast<uint32_t>(Args[3]));
     } else if (Number == UNIX_SYSCALL_SHARED_REGION_CHECK_NP) {
-      // the kernel would point dyld at the arm64 cache. say theres none so x86_64 dyld maps its own
       Result = {static_cast<uint64_t>(EINVAL), 0, true};
     } else {
       Result = DoHostSyscall(Number, Args);

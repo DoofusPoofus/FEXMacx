@@ -274,8 +274,6 @@ public:
 private:
 
 #if defined(__APPLE__)
-  // macos cant wait on 16 bits or use futex bitsets so evry waiter sleeps on the whole word
-  // and wakes wake evryone. waiters always recheck the lock so extra wakeups are harmless
   void FutexWaitForWriteAvailable(uint32_t Expected) {
     os_sync_wait_on_address(&Futex, Expected, sizeof(Futex), OS_SYNC_WAIT_ON_ADDRESS_NONE);
   }

@@ -694,7 +694,6 @@ FEXCore::HostFeatures FetchHostFeatures(bool Is64BitMode) {
   uint64_t CTR = 0;
   uint64_t MIDR = 0;
 #if defined(__APPLE__)
-  // macos doesnt let user code read ctr_el0 or midr_el1. 64 byte lines is the safe (smaller) guess
   constexpr uint64_t CacheLineLog2Words = 4;
   CTR = (CacheLineLog2Words << 16) | CacheLineLog2Words;
 #elif defined(ARCHITECTURE_arm64) && !defined(VIXL_SIMULATOR)

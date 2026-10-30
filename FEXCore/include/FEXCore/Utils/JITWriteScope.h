@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: MIT
+/*
+ macOS keeps MAP_JIT memory either writable or executable per thread
+ hold a ScopedJITWrite while writing jit code. nesting is fine and only the outermost one flips it back
+*/
 #pragma once
 
 #ifdef __APPLE__
@@ -6,8 +10,6 @@
 #endif
 
 namespace FEXCore::Utils {
-// macOS keeps MAP_JIT memory either writable or executable per thread.
-// Hold one of these while writing code. Nested scopes are fine and only the outermost one flips the state back.
 class ScopedJITWrite final {
 public:
   ScopedJITWrite() {
