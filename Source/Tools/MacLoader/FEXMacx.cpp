@@ -173,6 +173,10 @@ int main(int argc, char** argv, char** const envp) {
     fprintf(stderr, "FEXMacx: couldnt take the host workqueue for the guest\n");
     return 1;
   }
+  if (!SyscallHandler->InstallGuestSignals(SignalDelegation.get())) {
+    fprintf(stderr, "FEXMacx: couldnt set up guest signals\n");
+    return 1;
+  }
   if (!FEXMacx::InstallGuestFaultHandlers(CTX.get())) {
     fprintf(stderr, "FEXMacx: couldnt install the guest fault handlers\n");
     return 1;

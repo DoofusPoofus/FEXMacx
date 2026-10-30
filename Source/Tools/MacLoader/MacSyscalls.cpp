@@ -86,6 +86,10 @@ const char* UnixSyscallName(uint32_t Number) {
   case 75: return "madvise";
   case 92: return "fcntl";
   case 116: return "gettimeofday";
+  case 53: return "sigaltstack";
+  case 111: return "sigsuspend";
+  case 184: return "sigreturn";
+  case 329: return "pthread_sigmask";
   case 153: return "pread";
   case 169: return "csops";
   case 177: return "kdebug_typefilter";
@@ -247,6 +251,8 @@ HostSyscallResult DoHostSyscall(int64_t Number, const uint64_t (&Args)[8]) {
 void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
   auto& State = Frame->State;
   State.rip += SYSCALL_INSTRUCTION_SIZE;
+  const uint64_t ReturnRip = State.rip;
+  bool Interrupted = false;
   const uint64_t RawNumber = State.gregs[REG_RAX];
   const uint32_t Class = (RawNumber >> 24) & 0xFF;
   const uint32_t Number = RawNumber & 0xFF'FFFF;
@@ -265,7 +271,19 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
       fflush(nullptr);
     }
     HostSyscallResult Result {};
-    if (Number == UNIX_SYSCALL_MPROTECT) {
+    uint64_t SignalResult {};
+    bool SignalFailed {};
+    bool StateAlreadySet {};
+    if (Signals.HandleSyscall(Frame, Number, Args, SignalResult, SignalFailed, StateAlreadySet)) {
+      if (StateAlreadySet) {
+        if (TracingEnabled()) {
+          TraceSyscall("unix", Number, UnixSyscallName(Number), Args, 0, false);
+        }
+        Signals.DeliverPendingSignals(Frame, Number, RawNumber, false);
+        return;
+      }
+      Result = {SignalResult, 0, SignalFailed};
+    } else if (Number == UNIX_SYSCALL_MPROTECT) {
       const int Error = ProtectGuestRange(Args[0], Args[1], static_cast<int>(Args[2]));
       Result = {static_cast<uint64_t>(Error), 0, Error != 0};
     } else if (Number == UNIX_SYSCALL_MUNMAP) {
@@ -325,6 +343,7 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
     uint32_t EFLAGS = CTX->ReconstructCompactedEFLAGS(Frame->Thread, false, nullptr, 0);
     EFLAGS = Result.Failed ? (EFLAGS | X86_EFLAGS_CARRY) : (EFLAGS & ~X86_EFLAGS_CARRY);
     CTX->SetFlagsFromCompactedEFLAGS(Frame->Thread, EFLAGS);
+    Interrupted = Result.Failed && Result.Value == EINTR;
     break;
   }
   case SYSCALL_CLASS_MACH: {
@@ -378,6 +397,10 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
     LogMan::Msg::EFmt("unhandled syscall class {} number {}", Class, Number);
     State.gregs[REG_RAX] = ENOSYS;
     break;
+  }
+
+  if (State.rip == ReturnRip) {
+    Signals.DeliverPendingSignals(Frame, Class == SYSCALL_CLASS_UNIX ? Number : 0, RawNumber, Interrupted);
   }
 }
 } // namespace FEXMacx

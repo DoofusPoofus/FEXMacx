@@ -2,6 +2,7 @@
 #include "MacGuestFaults.h"
 
 #include "GuestThread.h"
+#include "MacSignals.h"
 
 #include <FEXCore/Core/Context.h>
 #include <FEXCore/Core/CoreState.h>
@@ -64,6 +65,7 @@ thread_local FEXCore::Core::InternalThreadState* CurrentGuestThread {};
 struct sigaction PreviousSegvAction {};
 struct sigaction PreviousBusAction {};
 struct sigaction PreviousIllAction {};
+struct sigaction PreviousTrapAction {};
 
 template<typename T>
 void WriteField(uint64_t Offset, T Value) {
@@ -236,6 +238,11 @@ bool FixUnalignedJITAccess(ucontext_t* Context, siginfo_t* Info) {
   if (!Thread || !GuestContext || Info->si_code != BUS_ADRALN || !GuestContext->IsAddressInCodeBuffer(Thread, PC)) {
     return false;
   }
+  const uint32_t Instruction = *reinterpret_cast<const uint32_t*>(PC);
+  const uint64_t AccessSize = 1ULL << (Instruction >> 30);
+  if ((reinterpret_cast<uint64_t>(Info->si_addr) & (AccessSize - 1)) == 0) {
+    return false;
+  }
 
   auto* GPRs = &Context->uc_mcontext->__ss.__x[0];
   const auto Result =
@@ -285,15 +292,21 @@ void GuestFaultHandler(int Signal, siginfo_t* Info, void* RawContext) {
   if (Signal != SIGILL && ResetOverflowedCallRetStack(Context, reinterpret_cast<uint64_t>(Info->si_addr))) {
     return;
   }
-  if (Signal == SIGILL) {
+  if (Signal == SIGILL || Signal == SIGTRAP) {
+    if (HandleGuestFaultSignal(Signal, Info, Context)) {
+      return;
+    }
     ReportGuestTrap(Context);
-    ForwardToPrevious(PreviousIllAction, Signal, Info, RawContext);
+    ForwardToPrevious(Signal == SIGILL ? PreviousIllAction : PreviousTrapAction, Signal, Info, RawContext);
     return;
   }
   if (EmulateCommPageLoad(Context, reinterpret_cast<uint64_t>(Info->si_addr))) {
     return;
   }
   if (Signal == SIGBUS && FixUnalignedJITAccess(Context, Info)) {
+    return;
+  }
+  if (HandleGuestFaultSignal(Signal, Info, Context)) {
     return;
   }
   ForwardToPrevious(Signal == SIGBUS ? PreviousBusAction : PreviousSegvAction, Signal, Info, RawContext);
@@ -309,10 +322,17 @@ bool InstallGuestFaultHandlers(FEXCore::Context::Context* CTX) {
   Action.sa_flags = SA_SIGINFO | SA_ONSTACK;
   sigemptyset(&Action.sa_mask);
   return sigaction(SIGSEGV, &Action, &PreviousSegvAction) == 0 && sigaction(SIGBUS, &Action, &PreviousBusAction) == 0 &&
-         sigaction(SIGILL, &Action, &PreviousIllAction) == 0;
+         sigaction(SIGILL, &Action, &PreviousIllAction) == 0 && sigaction(SIGTRAP, &Action, &PreviousTrapAction) == 0;
 }
 
 void SetCurrentGuestThread(FEXCore::Core::InternalThreadState* Thread) {
   CurrentGuestThread = Thread;
+  if (Thread) {
+    PrepareGuestSignalThread();
+  }
+}
+
+FEXCore::Core::InternalThreadState* GetCurrentGuestThread() {
+  return CurrentGuestThread;
 }
 } // namespace FEXMacx

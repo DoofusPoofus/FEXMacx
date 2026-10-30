@@ -13,9 +13,12 @@
  - task_restartable_ranges_register gets a local ok cuz the kernel cant restart x86 code
  - bsdthread and workq calls go to MacThreads
  - mach time (timer kevents mach_wait_until gettimeofday mach_timebase_info) goes thru MacTime
+ - sigaction sigprocmask sigaltstack sigsuspend sigreturn go to MacSignals and pending guest
+   signals get delivered on the way out of every syscall
 */
 #pragma once
 
+#include "MacSignals.h"
 #include "MacThreads.h"
 
 #include <FEXCore/HLE/SyscallHandler.h>
@@ -30,7 +33,8 @@ class MacSyscallHandler final : public FEXCore::HLE::SyscallHandler, public FEXC
 public:
   explicit MacSyscallHandler(FEXCore::Context::Context* CTX)
     : CTX {CTX}
-    , Threads {CTX} {}
+    , Threads {CTX}
+    , Signals {CTX} {}
 
   void HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) override;
 
@@ -46,8 +50,13 @@ public:
     return Threads.InstallHostWorkqueueBridge();
   }
 
+  bool InstallGuestSignals(const FEXCore::SignalDelegator* Delegator) {
+    return Signals.Install(Delegator);
+  }
+
 private:
   FEXCore::Context::Context* CTX;
   GuestThreads Threads;
+  GuestSignals Signals;
 };
 } // namespace FEXMacx

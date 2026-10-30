@@ -52,6 +52,12 @@ run_test gcd_timers 0 "dispatch_apply sum 2016
 serial queue order 1023
 dispatch_after fired
 timer source ticks 5"
+run_test signals 0 "fault fixed 1 value 42
+skipped fault rax 1234 alt stack 1
+alarm hits during busy loop 1
+thread got usr2 1
+blocked usr2 pending 1 delivered after unblock 1
+caught ud2"
 
 echo
 echo "$passed passed $failed failed"

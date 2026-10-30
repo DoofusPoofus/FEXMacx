@@ -16,7 +16,9 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 - [x] pthreads (`pthread_create` / `pthread_join` on real host threads)
 - [x] GCD dispatch_async / dispatch_group / dispatch_apply / serial queues (guest code runs on real kernel workqueue threads)
 - [x] GCD timers (dispatch_after and timer sources with mach time turned between ns and 24MHz ticks)
-- [ ] signals and c++ exceptions
+- [x] c++ exceptions
+- [x] signals (sigaction sigaltstack masks sigsuspend guest faults ud2 and async signals inside jit code)
+- [x] Foundation command line tools
 - [ ] x86_64 system frameworks beyond libSystem (Foundation AppKit)
 - [ ] real apps
 

@@ -11,6 +11,7 @@
  3 call/ret stack overflow
    FEX keeps a host side call/ret stack in x25. running into its guard pages just puts x25 back
    to the default spot like linux FEX does
+ 4 everything else goes to MacSignals first so guest handlers (and sigreturn) get a shot before we crash
 */
 #pragma once
 
@@ -24,4 +25,5 @@ struct InternalThreadState;
 namespace FEXMacx {
 bool InstallGuestFaultHandlers(FEXCore::Context::Context* CTX);
 void SetCurrentGuestThread(FEXCore::Core::InternalThreadState* Thread);
+FEXCore::Core::InternalThreadState* GetCurrentGuestThread();
 } // namespace FEXMacx
