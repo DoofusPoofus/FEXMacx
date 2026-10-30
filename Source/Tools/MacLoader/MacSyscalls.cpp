@@ -2,6 +2,7 @@
 #include "MacSyscalls.h"
 
 #include "GuestThread.h"
+#include "MacTime.h"
 
 #include <FEXCore/Core/Context.h>
 #include <FEXCore/Core/CoreState.h>
@@ -9,6 +10,7 @@
 #include <FEXCore/Utils/LogManager.h>
 
 #include <FEXCore/Utils/MathUtils.h>
+#include <FEXCore/fextl/vector.h>
 
 #include <cerrno>
 #include <cstdio>
@@ -33,12 +35,18 @@ constexpr uint64_t SYSCALL_INSTRUCTION_SIZE = 2;
 constexpr uint32_t UNIX_SYSCALL_EXIT = 1;
 constexpr uint32_t UNIX_SYSCALL_MUNMAP = 73;
 constexpr uint32_t UNIX_SYSCALL_MPROTECT = 74;
+constexpr uint32_t UNIX_SYSCALL_GETTIMEOFDAY = 116;
 constexpr uint32_t UNIX_SYSCALL_SHARED_REGION_CHECK_NP = 294;
 constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_CREATE = 360;
 constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_TERMINATE = 361;
 constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_REGISTER = 366;
 constexpr uint32_t UNIX_SYSCALL_WORKQ_OPEN = 367;
 constexpr uint32_t UNIX_SYSCALL_WORKQ_KERNRETURN = 368;
+constexpr uint32_t UNIX_SYSCALL_KEVENT_QOS = 374;
+constexpr uint32_t UNIX_SYSCALL_KEVENT_ID = 375;
+constexpr uint32_t MACH_TRAP_TIMEBASE_INFO = 89;
+constexpr uint32_t MACH_TRAP_WAIT_UNTIL = 90;
+constexpr uint64_t KEVENT_QOS_SIZE = 72;
 constexpr uint32_t MACH_TRAP_VM_DEALLOCATE = 12;
 constexpr uint32_t MACH_TRAP_VM_PROTECT = 14;
 constexpr uint32_t MACH_TRAP_MSG2 = 47;
@@ -268,20 +276,34 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
     } else if (Number == UNIX_SYSCALL_WORKQ_OPEN) {
       Result = {0, 0, false};
     } else if (Number == UNIX_SYSCALL_WORKQ_KERNRETURN) {
-      if (TracingEnabled()) {
-        TraceSyscall("unix", Number, "workq_kernreturn", Args, 0, false);
+      uint64_t LocalResult {};
+      bool LocalFailed {};
+      if (Threads.HandleWorkqueueCall(Frame, Args, LocalResult, LocalFailed)) {
+        Result = {LocalResult, 0, LocalFailed};
+      } else {
+        Result = DoHostSyscall(Number, Args);
       }
-      const int Error = Threads.HandleWorkqueueCall(Args[0], Args[1], Args[2], Args[3]);
-      Result = {static_cast<uint64_t>(Error), 0, Error != 0};
     } else if (Number == UNIX_SYSCALL_BSDTHREAD_CREATE) {
       int Error = 0;
       const uint64_t GuestPthread = Threads.Create(Args[0], Args[1], Args[2], Args[3], static_cast<uint32_t>(Args[4]), Error);
       Result = Error ? HostSyscallResult {static_cast<uint64_t>(Error), 0, true} : HostSyscallResult {GuestPthread, 0, false};
     } else if (Number == UNIX_SYSCALL_BSDTHREAD_TERMINATE) {
-      if (TracingEnabled()) {
-        TraceSyscall("unix", Number, "bsdthread_terminate", Args, 0, false);
+      Threads.Terminate(Frame, Args[0], Args[1], static_cast<uint32_t>(Args[2]), static_cast<uint32_t>(Args[3]));
+      Result = {0, 0, false};
+    } else if ((Number == UNIX_SYSCALL_KEVENT_QOS || Number == UNIX_SYSCALL_KEVENT_ID) && Args[1] && Args[2]) {
+      fextl::vector<uint8_t> Changes(Args[2] * KEVENT_QOS_SIZE);
+      memcpy(Changes.data(), reinterpret_cast<const void*>(Args[1]), Changes.size());
+      ConvertGuestTimerKevents(reinterpret_cast<uint64_t>(Changes.data()), Args[2]);
+      uint64_t HostArgs[8];
+      memcpy(HostArgs, Args, sizeof(HostArgs));
+      HostArgs[1] = reinterpret_cast<uint64_t>(Changes.data());
+      Result = DoHostSyscall(Number, HostArgs);
+    } else if (Number == UNIX_SYSCALL_GETTIMEOFDAY) {
+      Result = DoHostSyscall(Number, Args);
+      if (!Result.Failed && Args[2]) {
+        auto* MachTimeOut = reinterpret_cast<uint64_t*>(Args[2]);
+        *MachTimeOut = HostTicksToGuestNanoseconds(*MachTimeOut);
       }
-      Threads.Terminate(Args[0], Args[1], static_cast<uint32_t>(Args[2]), static_cast<uint32_t>(Args[3]));
     } else if (Number == UNIX_SYSCALL_SHARED_REGION_CHECK_NP) {
       Result = {static_cast<uint64_t>(EINVAL), 0, true};
     } else {
@@ -311,6 +333,15 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
     uint64_t LocalAnswer {};
     if (Number == MACH_TRAP_MSG2 && AnswerRestartableRangesLocally(Args, LocalAnswer)) {
       Result = {LocalAnswer, 0, false};
+    } else if (Number == MACH_TRAP_TIMEBASE_INFO) {
+      const uint32_t OneToOne[2] = {1, 1};
+      memcpy(reinterpret_cast<void*>(Args[0]), OneToOne, sizeof(OneToOne));
+      Result = {KERN_SUCCESS, 0, false};
+    } else if (Number == MACH_TRAP_WAIT_UNTIL) {
+      uint64_t HostArgs[8];
+      memcpy(HostArgs, Args, sizeof(HostArgs));
+      HostArgs[0] = GuestNanosecondsToHostTicks(Args[0]);
+      Result = DoHostSyscall(-static_cast<int64_t>(Number), HostArgs);
     } else if (Number == MACH_TRAP_VM_DEALLOCATE && IsOwnTask) {
       ReleaseGuestRange(Args[1], Args[2]);
       Result = {KERN_SUCCESS, 0, false};

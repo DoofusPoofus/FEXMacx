@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "MacGuestFaults.h"
 
+#include "GuestThread.h"
+
 #include <FEXCore/Core/Context.h>
 #include <FEXCore/Core/CoreState.h>
 #include <FEXCore/Debug/InternalThreadState.h>
@@ -264,8 +266,25 @@ void ReportGuestTrap(ucontext_t* Context) {
   write(STDERR_FILENO, Line, Length);
 }
 
+bool ResetOverflowedCallRetStack(ucontext_t* Context, uint64_t FaultAddress) {
+  auto* Thread = CurrentGuestThread;
+  if (!Thread || !Thread->CallRetStackBase) {
+    return false;
+  }
+  const auto Range = GetCallRetStackRange(Thread);
+  if (FaultAddress < Range.AllocationStart || FaultAddress >= Range.AllocationEnd) {
+    return false;
+  }
+  constexpr uint32_t CALLRET_STACK_REGISTER = 25;
+  HostRegister(Context, CALLRET_STACK_REGISTER) = Range.DefaultLocation;
+  return true;
+}
+
 void GuestFaultHandler(int Signal, siginfo_t* Info, void* RawContext) {
   auto* Context = static_cast<ucontext_t*>(RawContext);
+  if (Signal != SIGILL && ResetOverflowedCallRetStack(Context, reinterpret_cast<uint64_t>(Info->si_addr))) {
+    return;
+  }
   if (Signal == SIGILL) {
     ReportGuestTrap(Context);
     ForwardToPrevious(PreviousIllAction, Signal, Info, RawContext);

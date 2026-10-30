@@ -14,8 +14,8 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 - [x] Mach-O loader + XNU syscalls for tiny static x86_64 programs (`FEXMacx ./program`)
 - [x] x86_64 dyld + the x86_64 shared cache (a normal `printf` hello world runs)
 - [x] pthreads (`pthread_create` / `pthread_join` on real host threads)
-- [x] GCD dispatch_async / dispatch_group on global queues (emulated kernel workqueue)
-- [ ] GCD timers sources and workloops (the kevent side of the workqueue)
+- [x] GCD dispatch_async / dispatch_group / dispatch_apply / serial queues (guest code runs on real kernel workqueue threads)
+- [x] GCD timers (dispatch_after and timer sources with mach time turned between ns and 24MHz ticks)
 - [ ] signals and c++ exceptions
 - [ ] x86_64 system frameworks beyond libSystem (Foundation AppKit)
 - [ ] real apps

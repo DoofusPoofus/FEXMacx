@@ -161,11 +161,16 @@ int main(int argc, char** argv, char** const envp) {
   auto HostFeatures = FEX::FetchHostFeatures(true);
   auto CTX = FEXCore::Context::Context::CreateNewContext(HostFeatures);
   auto SignalDelegation = FEX::DummyHandlers::CreateSignalDelegator();
+  CTX->EnableExitOnHLT();
   auto SyscallHandler = fextl::make_unique<FEXMacx::MacSyscallHandler>(CTX.get());
   CTX->SetSignalDelegator(SignalDelegation.get());
   CTX->SetSyscallHandler(SyscallHandler.get());
   if (!CTX->InitCore()) {
     fprintf(stderr, "FEXMacx: FEXCore failed to start\n");
+    return 1;
+  }
+  if (Image->NeedsDynamicLinker() && !SyscallHandler->InstallHostWorkqueueBridge()) {
+    fprintf(stderr, "FEXMacx: couldnt take the host workqueue for the guest\n");
     return 1;
   }
   if (!FEXMacx::InstallGuestFaultHandlers(CTX.get())) {

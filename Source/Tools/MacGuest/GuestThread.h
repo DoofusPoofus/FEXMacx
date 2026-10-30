@@ -21,6 +21,13 @@ struct InternalThreadState;
 namespace FEXMacx {
 void ReleaseGuestRange(uint64_t Address, uint64_t Size);
 
+struct CallRetStackRange {
+  uint64_t AllocationStart;
+  uint64_t AllocationEnd;
+  uint64_t DefaultLocation;
+};
+CallRetStackRange GetCallRetStackRange(const FEXCore::Core::InternalThreadState* Thread);
+
 class GuestThreadSetup final {
 public:
   explicit GuestThreadSetup(FEXCore::Core::InternalThreadState* Thread);

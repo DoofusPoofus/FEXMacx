@@ -8,6 +8,9 @@
  2 unaligned atomics
    FEX uses arm64 acquire/release loads and stores for x86 memory ordering and those trap on
    unaligned addresses. FEXCore knows how to backpatch them so the SIGBUS just gets handed to it
+ 3 call/ret stack overflow
+   FEX keeps a host side call/ret stack in x25. running into its guard pages just puts x25 back
+   to the default spot like linux FEX does
 */
 #pragma once
 

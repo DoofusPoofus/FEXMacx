@@ -48,6 +48,10 @@ carry set on EBADF ok" banana two three
 run_test dynamic_hello 3 "hello from a dynamic x86_64 program (3 args)" a b
 run_test threads 0 "4 threads done, total 50000500000"
 run_test gcd 0 "gcd done, total 18018000"
+run_test gcd_timers 0 "dispatch_apply sum 2016
+serial queue order 1023
+dispatch_after fired
+timer source ticks 5"
 
 echo
 echo "$passed passed $failed failed"

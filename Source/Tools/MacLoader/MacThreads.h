@@ -7,12 +7,15 @@
  create     a pthread: host thread + FEX guest thread entering thread_start with the registers xnu sets
             rdi pthread rsi thread port rdx func rcx arg r8 stack r9 flags rsp stack-128
  terminate  free the guest stack, wake pthread_join, drop the port and end the host thread
- workqueue  libdispatch asks for n worker threads with workq_kernreturn(REQTHREADS). each one gets a
-            [guard | stack | pthread] block like the kernel gives and enters start_wqthread
-            rdi self rsi thread port rdx stack bottom rcx kevents r8 flags r9 kevent count
-            when the worker is done it calls workq_kernreturn(THREAD_RETURN) and the thread goes away
- evry new thread gets PTHREAD_START_TSD_BASE_SET (or the WQ version) in its flags and the thread port in
- the MACH_THREAD_SELF tsd slot cuz the kernel does that and libpthread checks it
+ workqueue  FEXMacx takes the process workqueue slot with its own host callbacks so the guests requests
+            kevents and workloops go straight to the real kernel. when the kernel starts a worker it lands
+            in a callback which runs the guests start_wqthread on that thread with the kernel register layout
+            rdi self rsi thread port rdx stack bottom rcx kevent list r8 flags r9 kevent count
+            (a workloop id sits rite b4 the kevent list). when the guest hands the thread back its re-arm
+            list becomes the callbacks result
+ a guest thread leaves FEX by jumping to a page with one hlt byte so ExecuteThread returns normally
+ evry new thread gets the TSD_BASE_SET flag and the thread port in the MACH_THREAD_SELF tsd slot cuz
+ the kernel does that and libpthread checks it
 */
 #pragma once
 
@@ -22,24 +25,30 @@
 namespace FEXCore::Context {
 class Context;
 }
+namespace FEXCore::Core {
+struct CpuStateFrame;
+}
 
 namespace FEXMacx {
 class GuestThreads final {
 public:
-  explicit GuestThreads(FEXCore::Context::Context* CTX)
-    : CTX {CTX} {}
+  explicit GuestThreads(FEXCore::Context::Context* CTX);
 
   uint64_t RecordRegistration(uint64_t ThreadStart, uint64_t WorkqueueThreadStart, uint64_t RegistrationData, uint64_t RegistrationDataSize);
 
   uint64_t Create(uint64_t StartFunction, uint64_t StartArgument, uint64_t Stack, uint64_t Pthread, uint32_t Flags, int& Error);
 
-  [[noreturn]]
-  void Terminate(uint64_t StackAddress, uint64_t FreeSize, uint32_t KernelPort, uint32_t JoinSemaphore);
+  void Terminate(FEXCore::Core::CpuStateFrame* Frame, uint64_t StackAddress, uint64_t FreeSize, uint32_t KernelPort, uint32_t JoinSemaphore);
 
-  int HandleWorkqueueCall(uint64_t Operation, uint64_t Item, uint64_t Argument, uint64_t Priority);
+  bool HandleWorkqueueCall(FEXCore::Core::CpuStateFrame* Frame, const uint64_t (&Args)[8], uint64_t& Result, bool& Failed);
+
+  bool InstallHostWorkqueueBridge();
 
   FEXCore::Context::Context* GetContext() const {
     return CTX;
+  }
+  uint64_t GetWorkqueueStart() const {
+    return WorkqueueStartAddress.load();
   }
   uint32_t GetTsdOffset() const {
     return TsdOffset.load();
@@ -47,11 +56,13 @@ public:
   uint32_t GetThreadSelfOffset() const {
     return ThreadSelfOffset.load();
   }
+  uint64_t GetExitTrampoline() const {
+    return ExitTrampoline;
+  }
 
 private:
-  bool StartWorkqueueThread(uint64_t Priority);
-
   FEXCore::Context::Context* CTX;
+  uint64_t ExitTrampoline {};
   std::atomic<uint64_t> ThreadStartAddress {};
   std::atomic<uint64_t> WorkqueueStartAddress {};
   std::atomic<uint32_t> TsdOffset {};

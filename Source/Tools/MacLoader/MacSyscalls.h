@@ -12,6 +12,7 @@
  - shared_region_check_np says theres no cache so x86_64 dyld maps the x86_64 one itself
  - task_restartable_ranges_register gets a local ok cuz the kernel cant restart x86 code
  - bsdthread and workq calls go to MacThreads
+ - mach time (timer kevents mach_wait_until gettimeofday mach_timebase_info) goes thru MacTime
 */
 #pragma once
 
@@ -39,6 +40,10 @@ public:
 
   FEXCore::HLE::ExecutableRangeInfo QueryGuestExecutableRange(FEXCore::Core::InternalThreadState*, uint64_t) override {
     return {0, UINT64_MAX, true};
+  }
+
+  bool InstallHostWorkqueueBridge() {
+    return Threads.InstallHostWorkqueueBridge();
   }
 
 private:

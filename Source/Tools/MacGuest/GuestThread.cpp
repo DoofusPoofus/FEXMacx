@@ -17,6 +17,13 @@ void ReleaseGuestRange(uint64_t Address, uint64_t Size) {
   }
 }
 
+CallRetStackRange GetCallRetStackRange(const FEXCore::Core::InternalThreadState* Thread) {
+  const uint64_t HostPageSize = getpagesize();
+  const uint64_t StackSize = FEXCore::AlignUp(FEXCore::Core::InternalThreadState::CALLRET_STACK_SIZE, HostPageSize);
+  const uint64_t Base = reinterpret_cast<uint64_t>(Thread->CallRetStackBase);
+  return {Base - HostPageSize, Base + StackSize + HostPageSize, Base + StackSize / 4};
+}
+
 GuestThreadSetup::GuestThreadSetup(FEXCore::Core::InternalThreadState* Thread) {
   auto& State = Thread->CurrentFrame->State;
 
@@ -45,7 +52,7 @@ GuestThreadSetup::GuestThreadSetup(FEXCore::Core::InternalThreadState* Thread) {
   CallRetAllocation = Allocation;
   CallRetAllocationSize = AllocationSize;
   Thread->CallRetStackBase = Allocation + HostPageSize;
-  State.callret_sp = reinterpret_cast<uint64_t>(Thread->CallRetStackBase) + CallRetStackSize / 4;
+  State.callret_sp = GetCallRetStackRange(Thread).DefaultLocation;
 }
 
 GuestThreadSetup::~GuestThreadSetup() {
