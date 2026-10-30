@@ -7,6 +7,7 @@
 #include "Interface/Core/LookupCache.h"
 #include "Utils/MemberFunctionToPointer.h"
 
+#include <FEXCore/Utils/JITWriteScope.h>
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Core/CoreState.h>
 #include <FEXCore/Core/SignalDelegator.h>
@@ -39,7 +40,10 @@ constexpr size_t MAX_DISPATCHER_CODE_SIZE = FEXCore::Utils::FEX_PAGE_SIZE * 4;
 Dispatcher::Dispatcher(FEXCore::Context::ContextImpl* ctx)
   : Arm64Emitter(ctx, FEXCore::Allocator::VirtualAlloc(MAX_DISPATCHER_CODE_SIZE, true), MAX_DISPATCHER_CODE_SIZE)
   , CTX {ctx} {
-  EmitDispatcher();
+  {
+    FEXCore::Utils::ScopedJITWrite JITWrite;
+    EmitDispatcher();
+  }
 
   FEXCore::Allocator::VirtualName("FEXMem_Misc", reinterpret_cast<void*>(GetBufferBase()), MAX_DISPATCHER_CODE_SIZE);
 }

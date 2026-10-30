@@ -4,6 +4,7 @@
 #include "FEXCore/Utils/MathUtils.h"
 #include "FEXCore/Utils/TypeDefines.h"
 #include "FEXCore/fextl/memory.h"
+#include <FEXCore/Utils/JITWriteScope.h>
 #include <FEXCore/Utils/Profiler.h>
 #include <FEXCore/Utils/SpinWaitLock.h>
 
@@ -988,6 +989,7 @@ void CodeCache::FinalizeCodePages(MappedCodeCacheFile& Code, std::span<std::byte
   Allocator::VirtualDontNeed(Code.CodeBufferInFile.data() + StartOffset, Size);
 #else
   // TODO: Implement lazy mapping on Windows and macOS
+  FEXCore::Utils::ScopedJITWrite JITWrite;
 #if defined(_M_ARM64EC) || defined(__APPLE__)
   memcpy(Code.CodeBuffer.data() + StartOffset, Code.CodeBufferInFile.data() + StartOffset, Size);
 #endif
