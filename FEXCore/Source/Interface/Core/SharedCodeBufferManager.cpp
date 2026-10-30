@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include <sys/mman.h>
 #include <unistd.h>
 #include "Interface/Core/LookupCache.h"
 #include "Interface/Core/SharedCodeBufferManager.h"
@@ -30,8 +31,13 @@ CodeBuffer::CodeBuffer(size_t Size, bool ShouldBeNamed)
   const size_t GuardPageSize = FEXCore::Utils::FEX_PAGE_SIZE;
 #endif
   uintptr_t LastPageAddr = AlignDown(reinterpret_cast<uintptr_t>(Ptr) + Size - 1, GuardPageSize);
+#ifdef __APPLE__
+  // MAP_JIT memory cant be mprotected on macOS so lay a seperate PROT_NONE mapping over the last page instead
+  if (::mmap(reinterpret_cast<void*>(LastPageAddr), GuardPageSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
+#else
   if (!FEXCore::Allocator::VirtualProtect(reinterpret_cast<void*>(LastPageAddr), GuardPageSize,
                                           FEXCore::Allocator::ProtectOptions::None)) {
+#endif
     LogMan::Msg::EFmt("Failed to mprotect last page of code buffer.");
   }
 

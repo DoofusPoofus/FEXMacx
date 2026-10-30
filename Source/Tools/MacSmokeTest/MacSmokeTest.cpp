@@ -11,6 +11,7 @@
 #include "Common/Config.h"
 #include "Common/HostFeatures.h"
 #include "DummyHandlers.h"
+#include "GuestThread.h"
 
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Core/Context.h>
@@ -18,14 +19,12 @@
 #include <FEXCore/Core/X86Enums.h>
 #include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/Utils/LogManager.h>
-#include <FEXCore/Utils/MathUtils.h>
 #include <FEXCore/fextl/fmt.h>
 #include <FEXCore/fextl/vector.h>
 
 #include <cstdint>
 #include <cstring>
 #include <sys/mman.h>
-#include <unistd.h>
 
 namespace {
 using namespace FEXCore::X86State;
@@ -107,29 +106,12 @@ bool RunSmokeTest(FEXCore::Context::Context* CTX, const SmokeTest& Test, uint8_t
   State.rip = reinterpret_cast<uint64_t>(CodePage);
   State.gregs[REG_RSP] = StackTop;
 
-  FEXCore::Core::CPUState::gdt_segment GuestGDT[32] {};
-  State.segment_arrays[FEXCore::Core::CPUState::SEGMENT_ARRAY_INDEX_GDT] = &GuestGDT[0];
-  State.segment_arrays[FEXCore::Core::CPUState::SEGMENT_ARRAY_INDEX_LDT] = &GuestGDT[0];
-  State.cs_idx = FEXCore::Core::CPUState::DEFAULT_USER_CS << 3;
-  auto* CodeSegment = FEXCore::Core::CPUState::GetSegmentFromIndex(State, State.cs_idx);
-  FEXCore::Core::CPUState::SetGDTBase(CodeSegment, 0);
-  FEXCore::Core::CPUState::SetGDTLimit(CodeSegment, 0xF'FFFFU);
-  CodeSegment->L = 1;
-  CodeSegment->D = 0;
-  State.cs_cached = FEXCore::Core::CPUState::CalculateGDTBase(*CodeSegment);
-
-  const size_t HostPageSize = getpagesize();
-  const size_t CallRetStackSize = FEXCore::AlignUp(FEXCore::Core::InternalThreadState::CALLRET_STACK_SIZE, HostPageSize);
-  const size_t CallRetAllocationSize = CallRetStackSize + 2 * HostPageSize;
-  auto* CallRetAllocation = static_cast<uint8_t*>(mmap(nullptr, CallRetAllocationSize, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0));
-  if (CallRetAllocation == MAP_FAILED) {
-    fextl::fmt::print("FAIL  {:10} couldnt map the call/ret stack\n", Test.Name);
+  FEXMacx::GuestThreadSetup ThreadSetup {Thread};
+  if (!ThreadSetup.IsReady()) {
+    fextl::fmt::print("FAIL  {:10} couldnt set up the guest thread\n", Test.Name);
     CTX->DestroyThread(Thread);
     return false;
   }
-  mprotect(CallRetAllocation + HostPageSize, CallRetStackSize, PROT_READ | PROT_WRITE);
-  Thread->CallRetStackBase = CallRetAllocation + HostPageSize;
-  State.callret_sp = reinterpret_cast<uint64_t>(Thread->CallRetStackBase) + CallRetStackSize / 4;
 
   CTX->ExecuteThread(Thread);
 
@@ -147,7 +129,6 @@ bool RunSmokeTest(FEXCore::Context::Context* CTX, const SmokeTest& Test, uint8_t
   }
 
   CTX->DestroyThread(Thread);
-  munmap(CallRetAllocation, CallRetAllocationSize);
   return Passed;
 }
 } // namespace

@@ -420,11 +420,14 @@ public:
 private:
   void* Alloc(size_t Size) override {
     auto Ptr = FEXCore::Allocator::VirtualAlloc(Size);
+#ifndef __APPLE__
+    // macOS pages are 16K so a 4K guard here cant be protected. the guard is only an overflow safety net so its skipped there
     uintptr_t LastPageAddr = AlignDown(reinterpret_cast<uintptr_t>(Ptr) + Size - 1, FEXCore::Utils::FEX_PAGE_SIZE);
     if (!FEXCore::Allocator::VirtualProtect(reinterpret_cast<void*>(LastPageAddr), FEXCore::Utils::FEX_PAGE_SIZE,
                                             FEXCore::Allocator::ProtectOptions::None)) {
       LogMan::Msg::EFmt("Failed to mprotect last page of code buffer.");
     }
+#endif
     if (Name) {
       FEXCore::Allocator::VirtualName(Name, Ptr, Size);
     }

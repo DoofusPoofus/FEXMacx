@@ -1,7 +1,9 @@
 add_subdirectory(CommonTools)
 
 if (APPLE)
+  add_subdirectory(MacGuest/)
   add_subdirectory(MacSmokeTest/)
+  add_subdirectory(MacLoader/)
 elseif (NOT MINGW)
   if (BUILD_FEXCONFIG)
     find_package(Qt6 COMPONENTS Qml Quick Widgets QUIET)

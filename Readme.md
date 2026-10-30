@@ -11,7 +11,7 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 - [x] x86_64 smoke tests run on apple silicon (math loops stack call/ret sse x87 rep stos)
 - [ ] 4K guest pages on top of 16K host pages
 - [ ] FEX asm tests (they put code below 4GB which arm64 macOS never allows so they need moving)
-- [ ] Mach-O loader + XNU syscalls for a tiny static x86_64 program
+- [x] Mach-O loader + XNU syscalls for tiny static x86_64 programs (`FEXMacx ./program`)
 - [ ] x86_64 dyld and system frameworks
 - [ ] real apps
 
@@ -23,7 +23,10 @@ cd FEXMacx
 cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DENABLE_LTO=FALSE -DTUNE_CPU=apple-m1
 cmake --build build -j
 ./build/Bin/FEXMacxSmokeTest
+unittests/MacOS/run_tests.sh build/Bin/FEXMacx
 ```
+
+`FEXMacx ./some_x86_64_program args` runs a static x86_64 mac program. normal apps are dynamic and need the x86_64 dyld which is the next big step
 
 ### stuff that will never work
 
