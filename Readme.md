@@ -12,7 +12,9 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 - [ ] 4K guest pages on top of 16K host pages
 - [ ] FEX asm tests (they put code below 4GB which arm64 macOS never allows so they need moving)
 - [x] Mach-O loader + XNU syscalls for tiny static x86_64 programs (`FEXMacx ./program`)
-- [ ] x86_64 dyld and system frameworks
+- [x] x86_64 dyld + the x86_64 shared cache (a normal `printf` hello world runs)
+- [ ] threads signals and c++ exceptions
+- [ ] x86_64 system frameworks beyond libSystem (Foundation AppKit)
 - [ ] real apps
 
 ### try it
@@ -26,7 +28,9 @@ cmake --build build -j
 unittests/MacOS/run_tests.sh build/Bin/FEXMacx
 ```
 
-`FEXMacx ./some_x86_64_program args` runs a static x86_64 mac program. normal apps are dynamic and need the x86_64 dyld which is the next big step
+`FEXMacx ./some_x86_64_program args` runs x86_64 mac programs. dynamic ones go thru the real x86_64 dyld and the x86_64 shared cache
+
+heads up: the x86_64 shared cache comes from rosettas cryptex (`/System/Volumes/Preboot/Cryptexes/Rosetta`) so rosetta has to be installed even tho it doesnt run anything
 
 ### stuff that will never work
 

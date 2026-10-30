@@ -29,11 +29,17 @@ struct MappedMachOImage {
   uint64_t MappedSize;
   uint64_t Slide;
   uint64_t EntryPoint;
+  uint64_t HeaderAddress;
 };
 
 class MachOImage final {
 public:
-  static std::optional<MachOImage> Open(const fextl::string& Path, fextl::string& Error);
+  enum class Kind {
+    Executable,
+    DynamicLinker,
+  };
+
+  static std::optional<MachOImage> Open(const fextl::string& Path, Kind ExpectedKind, fextl::string& Error);
 
   std::optional<MappedMachOImage> Map(fextl::string& Error) const;
 
@@ -51,7 +57,7 @@ public:
   }
 
 private:
-  bool Parse(fextl::string& Error);
+  bool Parse(Kind ExpectedKind, fextl::string& Error);
 
   fextl::vector<uint8_t> SliceData;
   fextl::vector<MachOSegment> Segments;

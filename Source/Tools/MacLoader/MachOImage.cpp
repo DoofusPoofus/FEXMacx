@@ -108,19 +108,19 @@ bool ExtractX86_64Slice(fextl::vector<uint8_t>& FileData, fextl::string& Error) 
 }
 } // namespace
 
-std::optional<MachOImage> MachOImage::Open(const fextl::string& Path, fextl::string& Error) {
+std::optional<MachOImage> MachOImage::Open(const fextl::string& Path, Kind ExpectedKind, fextl::string& Error) {
   MachOImage Image;
   if (!ReadWholeFile(Path, Image.SliceData)) {
     Error = fextl::fmt::format("couldnt read {}", Path);
     return std::nullopt;
   }
-  if (!ExtractX86_64Slice(Image.SliceData, Error) || !Image.Parse(Error)) {
+  if (!ExtractX86_64Slice(Image.SliceData, Error) || !Image.Parse(ExpectedKind, Error)) {
     return std::nullopt;
   }
   return Image;
 }
 
-bool MachOImage::Parse(fextl::string& Error) {
+bool MachOImage::Parse(Kind ExpectedKind, fextl::string& Error) {
   mach_header_64 Header {};
   if (!ReadAt(SliceData, 0, Header) || Header.magic != MH_MAGIC_64) {
     Error = "not a 64-bit mach-o";
@@ -130,8 +130,9 @@ bool MachOImage::Parse(fextl::string& Error) {
     Error = "mach-o is not x86_64";
     return false;
   }
-  if (Header.filetype != MH_EXECUTE) {
-    Error = "only executables can be launched";
+  const uint32_t ExpectedFileType = ExpectedKind == Kind::Executable ? MH_EXECUTE : MH_DYLINKER;
+  if (Header.filetype != ExpectedFileType) {
+    Error = ExpectedKind == Kind::Executable ? "only executables can be launched" : "not a dynamic linker";
     return false;
   }
   PositionIndependent = (Header.flags & MH_PIE) != 0;
@@ -261,11 +262,20 @@ std::optional<MappedMachOImage> MachOImage::Map(fextl::string& Error) const {
     EntryPoint = TextSegment->VMAddress + *MainEntryOffset + Slide;
   }
 
+  auto HeaderSegment =
+    std::find_if(Segments.begin(), Segments.end(), [](const MachOSegment& Segment) { return Segment.FileOffset == 0 && Segment.FileSize != 0; });
+  if (HeaderSegment == Segments.end()) {
+    Error = "no segment contains the mach-o header";
+    munmap(Mapping, MappedSize);
+    return std::nullopt;
+  }
+
   return MappedMachOImage {
     .MappedBase = MappedBase,
     .MappedSize = MappedSize,
     .Slide = Slide,
     .EntryPoint = EntryPoint,
+    .HeaderAddress = HeaderSegment->VMAddress + Slide,
   };
 }
 } // namespace FEXMacx

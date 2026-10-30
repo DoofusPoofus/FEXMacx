@@ -1,5 +1,5 @@
 #!/bin/sh
-# builds the tiny static x86_64 test programs in here and runs them thru FEXMacx
+# builds the x86_64 test programs in here (static asm ones and dynamic C ones) and runs them thru FEXMacx
 # each one gets compared against the stdout and exit code macOS would give
 # usage: unittests/MacOS/run_tests.sh [path to FEXMacx]
 
@@ -17,7 +17,12 @@ run_test() {
     expected_output=$3
     shift 3
 
-    if ! clang -target x86_64-apple-macos12 -nostdlib -static -Wl,-e,_start -o "$work_dir/$name" "$here/$name.s"; then
+    if [ -f "$here/$name.c" ]; then
+        build_command="clang -target x86_64-apple-macos12 -O1 -o $work_dir/$name $here/$name.c"
+    else
+        build_command="clang -target x86_64-apple-macos12 -nostdlib -static -Wl,-e,_start -o $work_dir/$name $here/$name.s"
+    fi
+    if ! $build_command; then
         echo "FAIL  $name (didnt assemble)"
         failed=$((failed + 1))
         return
@@ -40,6 +45,7 @@ run_test() {
 run_test hello 7 "hello from x86_64 thru FEXMacx"
 run_test args 4 "banana
 carry set on EBADF ok" banana two three
+run_test dynamic_hello 3 "hello from a dynamic x86_64 program (3 args)" a b
 
 echo
 echo "$passed passed $failed failed"
