@@ -17,7 +17,11 @@
 #include <fmt/format.h>
 #include <functional>
 #ifndef _WIN32
+#ifdef __APPLE__
+#include <limits.h>
+#else
 #include <linux/limits.h>
+#endif
 #include <pwd.h>
 #endif
 #include <optional>

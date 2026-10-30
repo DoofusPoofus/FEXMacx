@@ -1,0 +1,3 @@
+add_executable(FEXMacxSmokeTest MacSmokeTest.cpp)
+target_include_directories(FEXMacxSmokeTest PRIVATE ${CMAKE_BINARY_DIR}/generated)
+target_link_libraries(FEXMacxSmokeTest PRIVATE FEXCore Common CommonTools JemallocLibs)

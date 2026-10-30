@@ -4,7 +4,11 @@
 #include <FEXCore/fextl/fmt.h>
 
 #include <fcntl.h>
+#ifdef __APPLE__
+#include <limits.h>
+#else
 #include <linux/limits.h>
+#endif
 #include <unistd.h>
 
 namespace FEX {

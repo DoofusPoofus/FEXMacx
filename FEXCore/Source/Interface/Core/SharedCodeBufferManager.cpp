@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include <unistd.h>
 #include "Interface/Core/LookupCache.h"
 #include "Interface/Core/SharedCodeBufferManager.h"
 
@@ -22,8 +23,14 @@ CodeBuffer::CodeBuffer(size_t Size, bool ShouldBeNamed)
   LOGMAN_THROW_A_FMT(!!Ptr, "Couldn't allocate code buffer");
 
   // Protect the last page of the allocated buffer to trigger SIGSEGV on write access
-  uintptr_t LastPageAddr = AlignDown(reinterpret_cast<uintptr_t>(Ptr) + Size - 1, FEXCore::Utils::FEX_PAGE_SIZE);
-  if (!FEXCore::Allocator::VirtualProtect(reinterpret_cast<void*>(LastPageAddr), FEXCore::Utils::FEX_PAGE_SIZE,
+#ifdef __APPLE__
+  // apple silicon has 16K pages so the guard has to be a whole host page
+  const size_t GuardPageSize = getpagesize();
+#else
+  const size_t GuardPageSize = FEXCore::Utils::FEX_PAGE_SIZE;
+#endif
+  uintptr_t LastPageAddr = AlignDown(reinterpret_cast<uintptr_t>(Ptr) + Size - 1, GuardPageSize);
+  if (!FEXCore::Allocator::VirtualProtect(reinterpret_cast<void*>(LastPageAddr), GuardPageSize,
                                           FEXCore::Allocator::ProtectOptions::None)) {
     LogMan::Msg::EFmt("Failed to mprotect last page of code buffer.");
   }

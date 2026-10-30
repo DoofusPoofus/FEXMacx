@@ -7,11 +7,27 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 ### roadmap
 
 - [x] FEXCore (the x86 → arm64 jit) builds on macOS
-- [ ] jit memory works with macOS W^X (`MAP_JIT` + `pthread_jit_write_protect_np`)
-- [ ] FEX asm tests pass on apple silicon
+- [x] jit memory works with macOS W^X (`MAP_JIT` + `pthread_jit_write_protect_np`)
+- [x] x86_64 smoke tests run on apple silicon (math loops stack call/ret sse x87 rep stos)
+- [ ] 4K guest pages on top of 16K host pages
+- [ ] FEX asm tests (they put code below 4GB which arm64 macOS never allows so they need moving)
 - [ ] Mach-O loader + XNU syscalls for a tiny static x86_64 program
 - [ ] x86_64 dyld and system frameworks
 - [ ] real apps
+
+### try it
+
+```
+git clone --recursive https://github.com/DoofusPoofus/FEXMacx.git
+cd FEXMacx
+cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DENABLE_LTO=FALSE -DTUNE_CPU=apple-m1
+cmake --build build -j
+./build/Bin/FEXMacxSmokeTest
+```
+
+### stuff that will never work
+
+arm64 macOS wont launch a process with less than 4GB of `__PAGEZERO`. so x86_64 apps that were linked to use memory below 4GB (some old games with LuaJIT do this) cant run here. rosetta can only do it cuz the kernel treats its processes as x86_64
 
 below is the original FEX readme
 

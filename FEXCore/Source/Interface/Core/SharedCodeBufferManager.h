@@ -7,6 +7,7 @@ $end_info$
 */
 #pragma once
 
+#include <unistd.h>
 #include <FEXCore/fextl/memory.h>
 #include <FEXCore/Utils/MathUtils.h>
 #include <FEXCore/Utils/SignalScopeGuards.h>
@@ -68,7 +69,11 @@ struct CodeBuffer {
 
   // Returns the total number of bytes available for storing code
   size_t UsableSize() const {
+#ifdef __APPLE__
+    return AllocatedSize - getpagesize();
+#else
     return AllocatedSize - FEXCore::Utils::FEX_PAGE_SIZE;
+#endif
   }
 
   // Returns the full size of the buffer, including the guard page.

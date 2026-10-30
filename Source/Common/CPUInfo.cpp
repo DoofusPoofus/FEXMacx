@@ -9,7 +9,11 @@
 #ifdef _WIN32
 #include <thread>
 #else
+#ifdef __APPLE__
+#include <limits.h>
+#else
 #include <linux/limits.h>
+#endif
 #endif
 
 namespace FEX::CPUInfo {

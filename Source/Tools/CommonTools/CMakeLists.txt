@@ -1,6 +1,6 @@
 set(SRCS DummyHandlers.cpp)
 
-if (NOT MINGW)
+if (NOT MINGW AND NOT APPLE)
   list(APPEND SRCS Linux/Utils/ELFContainer.cpp)
 endif()
 

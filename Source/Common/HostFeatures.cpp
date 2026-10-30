@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include "Common/CPUInfo.h"
 #include "Common/HostFeatures.h"
-#ifndef _WIN32
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif !defined(_WIN32)
 #include "Common/Linux/LinuxVersion.h"
 #endif
 
@@ -90,7 +92,7 @@ public:
     ISAR1.SetReg(Get_ISAR1_EL1());
     MMFR0.SetReg(Get_MMFR0_EL1());
     MMFR2.SetReg(Get_MMFR2_EL1());
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
     if (FEX::LinuxVersion::CalculateHostKernelVersion() >= FEX::LinuxVersion::KernelVersion(6, 5)) {
       // Only exists in kernel 6.5 and newer.
       MMFR3.SetReg(Get_MMFR3_EL1());
@@ -115,6 +117,73 @@ public:
 FEX::CPUFeatures GetCPUFeaturesFromIDRegisters() {
   return CPUFeaturesFromID {};
 }
+
+#ifdef __APPLE__
+class CPUFeaturesFromSysctl final : public FEX::CPUFeatures {
+public:
+  CPUFeaturesFromSysctl() {
+    static constexpr std::pair<const char*, Feature> SysctlFeatures[] = {
+      {"hw.optional.floatingpoint", Feature::FP},
+      {"hw.optional.arm.AdvSIMD", Feature::ASIMD},
+      {"hw.optional.arm.FEAT_FP16", Feature::FP16},
+      {"hw.optional.arm.FEAT_FP16", Feature::ASIMD16},
+      {"hw.optional.arm.FEAT_AES", Feature::AES},
+      {"hw.optional.arm.FEAT_PMULL", Feature::PMULL},
+      {"hw.optional.arm.FEAT_SHA1", Feature::SHA1},
+      {"hw.optional.arm.FEAT_SHA256", Feature::SHA2},
+      {"hw.optional.arm.FEAT_SHA512", Feature::SHA512},
+      {"hw.optional.arm.FEAT_SHA3", Feature::SHA3},
+      {"hw.optional.arm.FEAT_CRC32", Feature::CRC32},
+      {"hw.optional.arm.FEAT_LSE", Feature::LSE},
+      {"hw.optional.arm.FEAT_LSE2", Feature::LSE2},
+      {"hw.optional.arm.FEAT_RDM", Feature::RDM},
+      {"hw.optional.arm.FEAT_DotProd", Feature::DotProd},
+      {"hw.optional.arm.FEAT_FlagM", Feature::FlagM},
+      {"hw.optional.arm.FEAT_FlagM2", Feature::FlagM2},
+      {"hw.optional.arm.FEAT_RNG", Feature::RNDR},
+      {"hw.optional.arm.FEAT_DIT", Feature::DIT},
+      {"hw.optional.arm.FEAT_CSV2", Feature::CSV2},
+      {"hw.optional.arm.FEAT_CSV3", Feature::CSV3},
+      {"hw.optional.arm.FEAT_BTI", Feature::BTI},
+      {"hw.optional.arm.FEAT_SSBS", Feature::SSBS},
+      {"hw.optional.arm.FEAT_DPB", Feature::DPB},
+      {"hw.optional.arm.FEAT_DPB2", Feature::DPB2},
+      {"hw.optional.arm.FEAT_JSCVT", Feature::JSCVT},
+      {"hw.optional.arm.FEAT_FCMA", Feature::FCMA},
+      {"hw.optional.arm.FEAT_LRCPC", Feature::LRCPC},
+      {"hw.optional.arm.FEAT_LRCPC2", Feature::LRCPC2},
+      {"hw.optional.arm.FEAT_LRCPC3", Feature::LRCPC3},
+      {"hw.optional.arm.FEAT_FRINTTS", Feature::FRINTTS},
+      {"hw.optional.arm.FEAT_SB", Feature::SB},
+      {"hw.optional.arm.FEAT_SPECRES", Feature::SPECRES},
+      {"hw.optional.arm.FEAT_BF16", Feature::BF16},
+      {"hw.optional.arm.FEAT_I8MM", Feature::I8MM},
+      {"hw.optional.arm.FEAT_ECV", Feature::ECV},
+      {"hw.optional.arm.FEAT_AFP", Feature::AFP},
+      {"hw.optional.arm.FEAT_WFxT", Feature::WFxt},
+      {"hw.optional.arm.FEAT_RPRES", Feature::RPRES},
+      {"hw.optional.arm.FEAT_HBC", Feature::HBC},
+      {"hw.optional.arm.FEAT_CSSC", Feature::CSSC},
+      {"hw.optional.arm.FEAT_MOPS", Feature::MOPS},
+    };
+
+    for (const auto& [SysctlName, HostFeature] : SysctlFeatures) {
+      if (SysctlFlagIsSet(SysctlName)) {
+        SetFeature(HostFeature);
+      }
+    }
+
+    DCZID.SetReg(Get_DCZID_EL0());
+  }
+
+private:
+  static bool SysctlFlagIsSet(const char* SysctlName) {
+    int Value {};
+    size_t ValueSize = sizeof(Value);
+    return sysctlbyname(SysctlName, &Value, &ValueSize, nullptr, 0) == 0 && Value != 0;
+  }
+};
+#endif
 #endif
 
 class CPUFeaturesFromConfig final : public FEX::CPUFeatures {
@@ -615,6 +684,8 @@ FEXCore::HostFeatures FetchHostFeatures(bool Is64BitMode) {
     Features.RemoveFeature(CPUFeatures::Feature::AFP);
     // Vixl simulator doesn't support RPRES.
     Features.RemoveFeature(CPUFeatures::Feature::RPRES);
+#elif defined(__APPLE__)
+    Features = CPUFeaturesFromSysctl {};
 #else
     Features = GetCPUFeaturesFromIDRegisters();
 #endif
@@ -622,7 +693,11 @@ FEXCore::HostFeatures FetchHostFeatures(bool Is64BitMode) {
 
   uint64_t CTR = 0;
   uint64_t MIDR = 0;
-#if defined(ARCHITECTURE_arm64) && !defined(VIXL_SIMULATOR)
+#if defined(__APPLE__)
+  // macos doesnt let user code read ctr_el0 or midr_el1. 64 byte lines is the safe (smaller) guess
+  constexpr uint64_t CacheLineLog2Words = 4;
+  CTR = (CacheLineLog2Words << 16) | CacheLineLog2Words;
+#elif defined(ARCHITECTURE_arm64) && !defined(VIXL_SIMULATOR)
   // We need to get the CPU's cache line size
   // We expect sane targets that have correct cacheline sizes across clusters
   __asm volatile("mrs %[ctr], ctr_el0" : [ctr] "=r"(CTR));

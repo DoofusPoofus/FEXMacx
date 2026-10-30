@@ -10,7 +10,7 @@ set(SRCS
   SHMStats.cpp
   VolatileMetadata.cpp)
 
-if (NOT MINGW)
+if (NOT MINGW AND NOT APPLE)
   list(APPEND SRCS
     FEXServerClient.cpp
     FileFormatCheck.cpp
