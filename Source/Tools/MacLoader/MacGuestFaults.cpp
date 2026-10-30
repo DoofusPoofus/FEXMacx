@@ -2,6 +2,8 @@
 #include "MacGuestFaults.h"
 
 #include <FEXCore/Core/Context.h>
+#include <FEXCore/Core/CoreState.h>
+#include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/Utils/ArchHelpers/Arm64.h>
 
 #include <cstdint>
@@ -59,6 +61,7 @@ FEXCore::Context::Context* GuestContext {};
 thread_local FEXCore::Core::InternalThreadState* CurrentGuestThread {};
 struct sigaction PreviousSegvAction {};
 struct sigaction PreviousBusAction {};
+struct sigaction PreviousIllAction {};
 
 template<typename T>
 void WriteField(uint64_t Offset, T Value) {
@@ -248,8 +251,26 @@ bool FixUnalignedJITAccess(ucontext_t* Context, siginfo_t* Info) {
   return true;
 }
 
+void ReportGuestTrap(ucontext_t* Context) {
+  auto* Thread = CurrentGuestThread;
+  const uint64_t PC = Context->uc_mcontext->__ss.__pc;
+  if (!Thread) {
+    return;
+  }
+  const bool InJIT = GuestContext && GuestContext->IsAddressInCodeBuffer(Thread, PC);
+  char Line[160];
+  const int Length = snprintf(Line, sizeof(Line), "FEXMacx: guest trapped (ud2 / invalid instruction) near rip 0x%llx (host pc 0x%llx%s)\n",
+                              (unsigned long long)Thread->CurrentFrame->State.rip, (unsigned long long)PC, InJIT ? " in jit code" : "");
+  write(STDERR_FILENO, Line, Length);
+}
+
 void GuestFaultHandler(int Signal, siginfo_t* Info, void* RawContext) {
   auto* Context = static_cast<ucontext_t*>(RawContext);
+  if (Signal == SIGILL) {
+    ReportGuestTrap(Context);
+    ForwardToPrevious(PreviousIllAction, Signal, Info, RawContext);
+    return;
+  }
   if (EmulateCommPageLoad(Context, reinterpret_cast<uint64_t>(Info->si_addr))) {
     return;
   }
@@ -268,7 +289,8 @@ bool InstallGuestFaultHandlers(FEXCore::Context::Context* CTX) {
   Action.sa_sigaction = GuestFaultHandler;
   Action.sa_flags = SA_SIGINFO | SA_ONSTACK;
   sigemptyset(&Action.sa_mask);
-  return sigaction(SIGSEGV, &Action, &PreviousSegvAction) == 0 && sigaction(SIGBUS, &Action, &PreviousBusAction) == 0;
+  return sigaction(SIGSEGV, &Action, &PreviousSegvAction) == 0 && sigaction(SIGBUS, &Action, &PreviousBusAction) == 0 &&
+         sigaction(SIGILL, &Action, &PreviousIllAction) == 0;
 }
 
 void SetCurrentGuestThread(FEXCore::Core::InternalThreadState* Thread) {

@@ -37,6 +37,8 @@ constexpr uint32_t UNIX_SYSCALL_SHARED_REGION_CHECK_NP = 294;
 constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_CREATE = 360;
 constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_TERMINATE = 361;
 constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_REGISTER = 366;
+constexpr uint32_t UNIX_SYSCALL_WORKQ_OPEN = 367;
+constexpr uint32_t UNIX_SYSCALL_WORKQ_KERNRETURN = 368;
 constexpr uint32_t MACH_TRAP_VM_DEALLOCATE = 12;
 constexpr uint32_t MACH_TRAP_VM_PROTECT = 14;
 constexpr uint32_t MACH_TRAP_MSG2 = 47;
@@ -95,7 +97,11 @@ const char* UnixSyscallName(uint32_t Number) {
   case 344: return "getdirentries64";
   case 366: return "bsdthread_register";
   case 367: return "workq_open";
+  case 368: return "workq_kernreturn";
+  case 478: return "bsdthread_ctl";
   case 372: return "thread_selfid";
+  case 374: return "kevent_qos";
+  case 375: return "kevent_id";
   case 381: return "__mac_syscall";
   case 396: return "read_nocancel";
   case 397: return "write_nocancel";
@@ -108,6 +114,7 @@ const char* UnixSyscallName(uint32_t Number) {
   case 515: return "ulock_wait";
   case 516: return "ulock_wake";
   case 520: return "terminate_with_payload";
+  case 530: return "kqueue_workloop_ctl";
   case 521: return "abort_with_payload";
   case 536: return "shared_region_map_and_slide_2_np";
   default: return "?";
@@ -261,8 +268,15 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
       ReleaseGuestRange(Args[0], Args[1]);
       Result = {0, 0, false};
     } else if (Number == UNIX_SYSCALL_BSDTHREAD_REGISTER) {
-      Threads.RecordRegistration(Args[0], Args[3], Args[4]);
-      Result = {static_cast<uint64_t>(EINVAL), 0, true};
+      Result = {Threads.RecordRegistration(Args[0], Args[1], Args[3], Args[4]), 0, false};
+    } else if (Number == UNIX_SYSCALL_WORKQ_OPEN) {
+      Result = {0, 0, false};
+    } else if (Number == UNIX_SYSCALL_WORKQ_KERNRETURN) {
+      if (TracingEnabled()) {
+        TraceSyscall("unix", Number, "workq_kernreturn", Args, 0, false);
+      }
+      const int Error = Threads.HandleWorkqueueCall(Args[0], Args[1], Args[2], Args[3]);
+      Result = {static_cast<uint64_t>(Error), 0, Error != 0};
     } else if (Number == UNIX_SYSCALL_BSDTHREAD_CREATE) {
       int Error = 0;
       const uint64_t GuestPthread = Threads.Create(Args[0], Args[1], Args[2], Args[3], static_cast<uint32_t>(Args[4]), Error);
