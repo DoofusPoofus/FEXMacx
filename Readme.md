@@ -13,7 +13,9 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 - [ ] FEX asm tests (they put code below 4GB which arm64 macOS never allows so they need moving)
 - [x] Mach-O loader + XNU syscalls for tiny static x86_64 programs (`FEXMacx ./program`)
 - [x] x86_64 dyld + the x86_64 shared cache (a normal `printf` hello world runs)
-- [ ] threads signals and c++ exceptions
+- [x] pthreads (`pthread_create` / `pthread_join` on real host threads)
+- [ ] GCD / dispatch queues (the kernel workqueue threads)
+- [ ] signals and c++ exceptions
 - [ ] x86_64 system frameworks beyond libSystem (Foundation AppKit)
 - [ ] real apps
 

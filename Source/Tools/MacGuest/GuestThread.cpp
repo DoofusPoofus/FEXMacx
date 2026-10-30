@@ -8,6 +8,15 @@
 #include <unistd.h>
 
 namespace FEXMacx {
+void ReleaseGuestRange(uint64_t Address, uint64_t Size) {
+  const uint64_t HostPageSize = getpagesize();
+  const uint64_t FullPagesStart = FEXCore::AlignUp(Address, HostPageSize);
+  const uint64_t FullPagesEnd = FEXCore::AlignDown(Address + Size, HostPageSize);
+  if (FullPagesStart < FullPagesEnd) {
+    munmap(reinterpret_cast<void*>(FullPagesStart), FullPagesEnd - FullPagesStart);
+  }
+}
+
 GuestThreadSetup::GuestThreadSetup(FEXCore::Core::InternalThreadState* Thread) {
   auto& State = Thread->CurrentFrame->State;
 

@@ -46,6 +46,7 @@ run_test hello 7 "hello from x86_64 thru FEXMacx"
 run_test args 4 "banana
 carry set on EBADF ok" banana two three
 run_test dynamic_hello 3 "hello from a dynamic x86_64 program (3 args)" a b
+run_test threads 0 "4 threads done, total 50000500000"
 
 echo
 echo "$passed passed $failed failed"

@@ -17,6 +17,10 @@ struct InternalThreadState;
 }
 
 namespace FEXMacx {
+// x86 apps think pages are 4K but apple silicon pages are 16K. freeing a 4K aligned range would take
+// the whole 16K page with it so only pages that are fully inside the range get released
+void ReleaseGuestRange(uint64_t Address, uint64_t Size);
+
 class GuestThreadSetup final {
 public:
   explicit GuestThreadSetup(FEXCore::Core::InternalThreadState* Thread);

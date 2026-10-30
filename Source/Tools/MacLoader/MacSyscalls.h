@@ -8,6 +8,8 @@
 */
 #pragma once
 
+#include "MacThreads.h"
+
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <FEXCore/Utils/AllocatorHooks.h>
 
@@ -19,7 +21,8 @@ namespace FEXMacx {
 class MacSyscallHandler final : public FEXCore::HLE::SyscallHandler, public FEXCore::Allocator::FEXAllocOperators {
 public:
   explicit MacSyscallHandler(FEXCore::Context::Context* CTX)
-    : CTX {CTX} {}
+    : CTX {CTX}
+    , Threads {CTX} {}
 
   void HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) override;
 
@@ -33,5 +36,6 @@ public:
 
 private:
   FEXCore::Context::Context* CTX;
+  GuestThreads Threads;
 };
 } // namespace FEXMacx

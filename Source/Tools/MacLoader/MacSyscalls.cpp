@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "MacSyscalls.h"
 
+#include "GuestThread.h"
+
 #include <FEXCore/Core/Context.h>
 #include <FEXCore/Core/CoreState.h>
 #include <FEXCore/Core/X86Enums.h>
@@ -29,8 +31,13 @@ enum SyscallClass : uint32_t {
 
 constexpr uint64_t SYSCALL_INSTRUCTION_SIZE = 2;
 constexpr uint32_t UNIX_SYSCALL_EXIT = 1;
+constexpr uint32_t UNIX_SYSCALL_MUNMAP = 73;
 constexpr uint32_t UNIX_SYSCALL_MPROTECT = 74;
 constexpr uint32_t UNIX_SYSCALL_SHARED_REGION_CHECK_NP = 294;
+constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_CREATE = 360;
+constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_TERMINATE = 361;
+constexpr uint32_t UNIX_SYSCALL_BSDTHREAD_REGISTER = 366;
+constexpr uint32_t MACH_TRAP_VM_DEALLOCATE = 12;
 constexpr uint32_t MACH_TRAP_VM_PROTECT = 14;
 constexpr uint32_t MACH_TRAP_MSG2 = 47;
 constexpr uint32_t MIG_TASK_RESTARTABLE_RANGES_REGISTER = 8000;
@@ -80,6 +87,8 @@ const char* UnixSyscallName(uint32_t Number) {
   case 294: return "shared_region_check_np";
   case 327: return "issetugid";
   case 336: return "proc_info";
+  case 360: return "bsdthread_create";
+  case 361: return "bsdthread_terminate";
   case 338: return "stat64";
   case 339: return "fstat64";
   case 340: return "lstat64";
@@ -248,6 +257,21 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
     if (Number == UNIX_SYSCALL_MPROTECT) {
       const int Error = ProtectGuestRange(Args[0], Args[1], static_cast<int>(Args[2]));
       Result = {static_cast<uint64_t>(Error), 0, Error != 0};
+    } else if (Number == UNIX_SYSCALL_MUNMAP) {
+      ReleaseGuestRange(Args[0], Args[1]);
+      Result = {0, 0, false};
+    } else if (Number == UNIX_SYSCALL_BSDTHREAD_REGISTER) {
+      Threads.RecordRegistration(Args[0], Args[3], Args[4]);
+      Result = {static_cast<uint64_t>(EINVAL), 0, true};
+    } else if (Number == UNIX_SYSCALL_BSDTHREAD_CREATE) {
+      int Error = 0;
+      const uint64_t GuestPthread = Threads.Create(Args[0], Args[1], Args[2], Args[3], static_cast<uint32_t>(Args[4]), Error);
+      Result = Error ? HostSyscallResult {static_cast<uint64_t>(Error), 0, true} : HostSyscallResult {GuestPthread, 0, false};
+    } else if (Number == UNIX_SYSCALL_BSDTHREAD_TERMINATE) {
+      if (TracingEnabled()) {
+        TraceSyscall("unix", Number, "bsdthread_terminate", Args, 0, false);
+      }
+      Threads.Terminate(Args[0], Args[1], static_cast<uint32_t>(Args[2]), static_cast<uint32_t>(Args[3]));
     } else if (Number == UNIX_SYSCALL_SHARED_REGION_CHECK_NP) {
       // the kernel would point dyld at the arm64 cache. say theres none so x86_64 dyld maps its own
       Result = {static_cast<uint64_t>(EINVAL), 0, true};
@@ -278,6 +302,9 @@ void MacSyscallHandler::HandleSyscall(FEXCore::Core::CpuStateFrame* Frame) {
     uint64_t LocalAnswer {};
     if (Number == MACH_TRAP_MSG2 && AnswerRestartableRangesLocally(Args, LocalAnswer)) {
       Result = {LocalAnswer, 0, false};
+    } else if (Number == MACH_TRAP_VM_DEALLOCATE && IsOwnTask) {
+      ReleaseGuestRange(Args[1], Args[2]);
+      Result = {KERN_SUCCESS, 0, false};
     } else if (Number == MACH_TRAP_VM_PROTECT && IsOwnTask) {
       const bool SetMaximum = Args[3] != 0;
       int Error = 0;
