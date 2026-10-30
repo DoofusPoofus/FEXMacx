@@ -943,7 +943,7 @@ void CodeCache::FinalizeCodePages(MappedCodeCacheFile& Code, std::span<std::byte
 
   FEXCORE_PROFILE_SCOPED("FinalizeCodePages");
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
   // Atomicity is critical when making the finalized code data visible.
   // We ensure this by remapping a temporary buffer onto the PROT_NONE
   // placeholder page in CodeBuffer. Some constraints to keep in mind are:
@@ -987,8 +987,8 @@ void CodeCache::FinalizeCodePages(MappedCodeCacheFile& Code, std::span<std::byte
   // Release resident file pages that will no longer be needed. The VA range is left allocated to allow cleanup with a single VirtualFree.
   Allocator::VirtualDontNeed(Code.CodeBufferInFile.data() + StartOffset, Size);
 #else
-  // TODO: Implement lazy mapping on Windows
-#ifdef _M_ARM64EC
+  // TODO: Implement lazy mapping on Windows and macOS
+#if defined(_M_ARM64EC) || defined(__APPLE__)
   memcpy(Code.CodeBuffer.data() + StartOffset, Code.CodeBufferInFile.data() + StartOffset, Size);
 #endif
   for (size_t i = StartPage; i < EndPage; ++i) {

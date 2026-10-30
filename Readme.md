@@ -6,7 +6,7 @@ FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps withou
 
 ### roadmap
 
-- [ ] FEXCore (the x86 → arm64 jit) builds on macOS
+- [x] FEXCore (the x86 → arm64 jit) builds on macOS
 - [ ] jit memory works with macOS W^X (`MAP_JIT` + `pthread_jit_write_protect_np`)
 - [ ] FEX asm tests pass on apple silicon
 - [ ] Mach-O loader + XNU syscalls for a tiny static x86_64 program

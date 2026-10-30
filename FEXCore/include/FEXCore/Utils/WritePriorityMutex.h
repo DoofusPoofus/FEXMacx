@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <limits.h>
 
-#if !defined(_WIN32)
+#if defined(__APPLE__)
+#include <os/os_sync_wait_on_address.h>
+#elif !defined(_WIN32)
 #include <linux/futex.h> /* Definition of FUTEX_* constants */
 #include <sys/syscall.h> /* Definition of SYS_* constants */
 #include <unistd.h>
@@ -271,7 +273,25 @@ public:
 
 private:
 
-#if !defined(_WIN32)
+#if defined(__APPLE__)
+  // macos cant wait on 16 bits or use futex bitsets so evry waiter sleeps on the whole word
+  // and wakes wake evryone. waiters always recheck the lock so extra wakeups are harmless
+  void FutexWaitForWriteAvailable(uint32_t Expected) {
+    os_sync_wait_on_address(&Futex, Expected, sizeof(Futex), OS_SYNC_WAIT_ON_ADDRESS_NONE);
+  }
+
+  void FutexWaitForReadAvailable(uint32_t Expected) {
+    os_sync_wait_on_address(&Futex, Expected, sizeof(Futex), OS_SYNC_WAIT_ON_ADDRESS_NONE);
+  }
+
+  void FutexWakeWriter() {
+    os_sync_wake_by_address_all(&Futex, sizeof(Futex), OS_SYNC_WAKE_BY_ADDRESS_NONE);
+  }
+
+  void FutexWakeReaders() {
+    os_sync_wake_by_address_all(&Futex, sizeof(Futex), OS_SYNC_WAKE_BY_ADDRESS_NONE);
+  }
+#elif !defined(_WIN32)
   void FutexWaitForWriteAvailable(uint32_t Expected) {
     ::syscall(SYS_futex, &Futex, FUTEX_PRIVATE_FLAG | FUTEX_WAIT_BITSET, Expected, nullptr, nullptr, FUTEX_BITSET_WAIT_WRITERS);
   }

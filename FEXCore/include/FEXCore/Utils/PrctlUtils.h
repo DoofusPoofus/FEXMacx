@@ -3,7 +3,16 @@
 
 #ifndef _WIN32
 
+#ifdef __APPLE__
+#include <errno.h>
+
+inline int prctl(int, ...) {
+  errno = EINVAL;
+  return -1;
+}
+#else
 #include <sys/prctl.h>
+#endif
 
 #ifndef PR_SET_VMA
 #define PR_SET_VMA 0x53564d41

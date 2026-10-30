@@ -3,7 +3,12 @@
 
 #ifdef ENABLE_FEX_ALLOCATOR
 #include <rpmalloc/rpmalloc.h>
-#ifndef _WIN32
+#if defined(__APPLE__)
+#include <sys/mman.h>
+#ifndef MADV_NOHUGEPAGE
+#define MADV_NOHUGEPAGE MADV_NORMAL
+#endif
+#elif !defined(_WIN32)
 #include <sys/prctl.h>
 #include <sys/mman.h>
 #else
@@ -13,7 +18,11 @@
 #endif
 
 #include <cstdint>
+#ifdef __APPLE__
+#include <malloc/malloc.h>
+#else
 #include <malloc.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -227,7 +236,12 @@ void* calloc(size_t n, size_t size) {
   return ::calloc(n, size);
 }
 void* memalign(size_t align, size_t s) {
+#ifdef __APPLE__
+  void* ptr {};
+  return ::posix_memalign(&ptr, align, s) == 0 ? ptr : nullptr;
+#else
   return ::memalign(align, s);
+#endif
 }
 void* valloc(size_t size) {
   return ::valloc(size);
@@ -242,7 +256,11 @@ void free(void* ptr) {
   return ::free(ptr);
 }
 size_t malloc_usable_size(void* ptr) {
+#ifdef __APPLE__
+  return ::malloc_size(ptr);
+#else
   return ::malloc_usable_size(ptr);
+#endif
 }
 void* aligned_alloc(size_t a, size_t s) {
   return ::aligned_alloc(a, s);

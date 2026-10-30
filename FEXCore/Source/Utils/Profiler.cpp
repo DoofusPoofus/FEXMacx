@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include <cstdint>
 #include <fcntl.h>
-#ifndef _WIN32
+#if defined(__APPLE__)
+#include <sys/stat.h>
+#elif !defined(_WIN32)
 #include <linux/magic.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>

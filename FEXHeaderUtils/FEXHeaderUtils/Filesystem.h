@@ -9,7 +9,10 @@
 #include <fcntl.h>
 #include <memory_resource>
 #include <string_view>
-#ifndef _WIN32
+#if defined(__APPLE__)
+#include <copyfile.h>
+#include <limits.h>
+#elif !defined(_WIN32)
 #include <linux/limits.h>
 #include <sys/sendfile.h>
 #else
@@ -216,7 +219,11 @@ inline bool CopyFile(const fextl::string& From, const fextl::string& To, CopyOpt
       close(SourceFD);
       return false;
     }
+#ifdef __APPLE__
+    bool Result = fcopyfile(SourceFD, DestinationFD, nullptr, COPYFILE_DATA) == 0;
+#else
     bool Result = sendfile(DestinationFD, SourceFD, nullptr, buf.st_size) == buf.st_size;
+#endif
     close(DestinationFD);
     close(SourceFD);
     return Result;

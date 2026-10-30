@@ -373,7 +373,11 @@ struct OpHandlers<IR::OP_F64SINCOS> {
     sin = ::sin(src);
     cos = ::cos(src);
 #else
+#ifdef __APPLE__
+    __sincos(src, &sin, &cos);
+#else
     sincos(src, &sin, &cos);
+#endif
 #endif
     return VectorScalarF64Pair {sin, cos};
   }

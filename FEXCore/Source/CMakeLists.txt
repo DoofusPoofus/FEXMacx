@@ -286,7 +286,8 @@ function(AddLibrary Name Type)
 
   # During generation of the import library (dll.a), MinGW needs some extra symbols from libraries
   # such as fmt, which are propagated by FEXCore_Base. Wonderful.
-  if (MINGW)
+  # macOS dylibs cant have unresolved symbols either so they need the same.
+  if (MINGW OR APPLE)
     target_link_libraries(${Name} PRIVATE FEXCore_Base)
   endif()
   AddDefaultOptionsToTarget(${Name})

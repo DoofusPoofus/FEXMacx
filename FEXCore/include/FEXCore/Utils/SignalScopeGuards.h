@@ -8,7 +8,9 @@
 #include <mutex>
 #include <optional>
 #include <signal.h>
-#ifndef _WIN32
+#if defined(__APPLE__)
+#include <pthread.h>
+#elif !defined(_WIN32)
 #include <sys/syscall.h>
 #endif
 #include <unistd.h>
@@ -158,7 +160,14 @@ public:
   explicit ScopedSignalMasker(uint64_t Mask)
     : OriginalMask(0) {
     // Mask all signals, storing the original incoming mask
+#ifdef __APPLE__
+    sigset_t NewMask = static_cast<sigset_t>(Mask);
+    sigset_t PreviousMask {};
+    ::pthread_sigmask(SIG_SETMASK, &NewMask, &PreviousMask);
+    OriginalMask = PreviousMask;
+#else
     ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &Mask, &*OriginalMask, sizeof(*OriginalMask));
+#endif
   }
 
   // Move-only type
@@ -171,7 +180,12 @@ public:
 
   ~ScopedSignalMasker() {
     if (OriginalMask) {
+#ifdef __APPLE__
+      sigset_t RestoredMask = static_cast<sigset_t>(*OriginalMask);
+      ::pthread_sigmask(SIG_SETMASK, &RestoredMask, nullptr);
+#else
       ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &OriginalMask, nullptr, sizeof(*OriginalMask));
+#endif
     }
   }
 private:

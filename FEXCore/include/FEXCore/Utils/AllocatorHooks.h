@@ -6,8 +6,23 @@
 
 #ifndef _WIN32
 #include <stdlib.h>
+#ifdef __APPLE__
+#include <malloc/malloc.h>
+#else
 #include <malloc.h>
+#endif
 #include <sys/mman.h>
+#ifdef __APPLE__
+#ifndef MADV_HUGEPAGE
+#define MADV_HUGEPAGE MADV_NORMAL
+#endif
+#ifndef MADV_NOHUGEPAGE
+#define MADV_NOHUGEPAGE MADV_NORMAL
+#endif
+#ifndef MADV_DONTDUMP
+#define MADV_DONTDUMP MADV_NORMAL
+#endif
+#endif
 #else
 #define NTDDI_VERSION 0x0A000005
 #include <memoryapi.h>

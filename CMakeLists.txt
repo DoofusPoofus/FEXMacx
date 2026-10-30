@@ -61,9 +61,9 @@ if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "Unsupported pointer size ${CMAKE_SIZEOF_VOID_P}."
     " FEX only supports 64-bit (8-byte pointer) systems."
     " If you believe this is in error, file an issue.")
-elseif (NOT (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+elseif (NOT (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin"))
   message(FATAL_ERROR "Unsupported system type ${CMAKE_SYSTEM_NAME}."
-    " FEX only supports Linux and Windows."
+    " FEXMacx only supports Linux, Windows and macOS."
     " If you believe this is in error, file an issue.")
 endif()
 
@@ -73,6 +73,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   message(FATAL_ERROR "FEX doesn't support GCC! Use Clang instead.")
 elseif (MSVC)
   message(FATAL_ERROR "FEX doesn't support MSVC! Use Clang on MinGW instead.")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  message(STATUS "Building FEXMacx for macOS (FEXCore only for now)")
+  set(ENABLE_JEMALLOC_GLIBC_ALLOC FALSE)
+  set(BUILD_FEXCONFIG FALSE)
+  set(BUILD_TESTING FALSE)
 elseif (MINGW)
   message(STATUS "Building for MinGW")
   set(ENABLE_FEX_ALLOCATOR TRUE)
@@ -641,12 +646,14 @@ add_subdirectory(FEXHeaderUtils/)
 add_subdirectory(CodeEmitter/)
 add_subdirectory(FEXCore/)
 
-if (ARCHITECTURE_arm64 AND NOT MINGW AND NOT BUILD_STEAM_SUPPORT)
+if (ARCHITECTURE_arm64 AND NOT MINGW AND NOT APPLE AND NOT BUILD_STEAM_SUPPORT)
   # Binfmt_misc files must be installed prior to Source/ installs
   add_subdirectory(Data/binfmts/)
 endif()
 
-add_subdirectory(Source/)
+if (NOT APPLE)
+  add_subdirectory(Source/)
+endif()
 
 if (NOT BUILD_STEAM_SUPPORT)
   add_subdirectory(Data/AppConfig/)

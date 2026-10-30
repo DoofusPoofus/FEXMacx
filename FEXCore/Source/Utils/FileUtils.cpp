@@ -2,6 +2,7 @@
 #include <FEXCore/fextl/fmt.h>
 #include <FEXCore/fextl/functional.h>
 #include <FEXCore/fextl/string.h>
+#include <FEXCore/fextl/vector.h>
 #include <FEXCore/Utils/CompilerDefs.h>
 #include <FEXCore/Utils/LogManager.h>
 
@@ -32,6 +33,61 @@ static inline bool unlinkat(int fd, const char* path, bool dir) {
   return true;
 }
 
+#ifdef __APPLE__
+static bool ListDirectory(int dir_fd, fextl::vector<std::pair<fextl::string, bool>>& Entries) {
+  int listing_fd = ::dup(dir_fd);
+  if (listing_fd == -1) {
+    return false;
+  }
+
+  DIR* Listing = ::fdopendir(listing_fd);
+  if (!Listing) {
+    close(listing_fd);
+    return false;
+  }
+
+  while (auto Entry = ::readdir(Listing)) {
+    std::string_view Name = Entry->d_name;
+    if (Name == "." || Name == "..") {
+      continue;
+    }
+    Entries.emplace_back(fextl::string(Name), Entry->d_type == DT_DIR);
+  }
+
+  ::closedir(Listing);
+  return true;
+}
+
+static bool RecursiveRemoveDirectory(int parent_fd, const char* Directory) {
+  constexpr int DIR_FLAGS = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+  int dir_fd = ::openat(parent_fd, Directory, DIR_FLAGS);
+  if (dir_fd == -1) {
+    return errno == ENOENT;
+  }
+
+  fextl::vector<std::pair<fextl::string, bool>> Entries;
+  bool Result = ListDirectory(dir_fd, Entries);
+  for (const auto& [Name, IsDirectory] : Entries) {
+    if (!Result) {
+      break;
+    }
+
+    if (IsDirectory && !RecursiveRemoveDirectory(dir_fd, Name.c_str())) {
+      Result = false;
+      break;
+    }
+
+    if (!unlinkat(dir_fd, Name.c_str(), IsDirectory)) {
+      LogMan::Msg::IFmt("Failed to remove file: {}", Name);
+      Result = false;
+      break;
+    }
+  }
+
+  close(dir_fd);
+  return Result;
+}
+#else
 static bool RecursiveRemoveDirectory(int parent_fd, const char* Directory) {
   // Don't follow symlinks and ensure it closes on exec.
   constexpr int DIR_FLAGS = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
@@ -125,10 +181,31 @@ end:
   return Result;
 }
 
+#endif
+
 FEX_DEFAULT_VISIBILITY bool RecursiveRemoveDirectory(const fextl::string& Directory) {
   return RecursiveRemoveDirectory(AT_FDCWD, Directory.c_str()) && unlinkat(AT_FDCWD, Directory.c_str(), true);
 }
 
+#ifdef __APPLE__
+FEX_DEFAULT_VISIBILITY void WalkDirectory(std::string_view Directory,
+                                          fextl::move_only_function<void(std::string_view name, bool is_dir, const void* user_data)> Callback,
+                                          const void* user_data) {
+  constexpr int DIR_FLAGS = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+  int dir_fd = ::openat(AT_FDCWD, fextl::string(Directory).c_str(), DIR_FLAGS);
+  if (dir_fd == -1) {
+    return;
+  }
+
+  fextl::vector<std::pair<fextl::string, bool>> Entries;
+  ListDirectory(dir_fd, Entries);
+  close(dir_fd);
+
+  for (const auto& [Name, IsDirectory] : Entries) {
+    Callback(Name, IsDirectory, user_data);
+  }
+}
+#else
 FEX_DEFAULT_VISIBILITY void WalkDirectory(std::string_view Directory,
                                           fextl::move_only_function<void(std::string_view name, bool is_dir, const void* user_data)> Callback,
                                           const void* user_data) {
@@ -201,6 +278,7 @@ end:
   close(dir_fd);
 }
 
+#endif
 #else
 static inline std::optional<UNICODE_STRING> PathToNTPath(std::string_view Path) {
   UNICODE_STRING PathW;
