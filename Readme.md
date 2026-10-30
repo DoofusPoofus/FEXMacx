@@ -1,3 +1,22 @@
+# FEXMacx
+
+FEX ported to macOS on apple silicon. the goal is running x86_64 mac apps without rosetta
+
+**super early. nothing runs yet.** this is a seperate fork of [FEX](https://github.com/FEX-Emu/FEX) and has nothing to do with the FEX team so dont send FEXMacx bugs to them
+
+### roadmap
+
+- [ ] FEXCore (the x86 → arm64 jit) builds on macOS
+- [ ] jit memory works with macOS W^X (`MAP_JIT` + `pthread_jit_write_protect_np`)
+- [ ] FEX asm tests pass on apple silicon
+- [ ] Mach-O loader + XNU syscalls for a tiny static x86_64 program
+- [ ] x86_64 dyld and system frameworks
+- [ ] real apps
+
+below is the original FEX readme
+
+---
+
 [中文](https://github.com/FEX-Emu/FEX/blob/main/docs/Readme_CN.md)
 # FEX: Emulate x86 Programs on ARM64
 FEX allows you to run x86 applications on ARM64 Linux devices, similar to qemu-user and box64.
